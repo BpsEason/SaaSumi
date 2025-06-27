@@ -27,7 +27,7 @@ SaaSumi 是一個模組化的多租戶民宿管理 SaaS，專為日本市場設�
    - 儀表板顯示動態 KPI（預約數、收益）與趨勢圖表，提升用戶體驗。
 
 5. **模組化設計**：
-   - 後端採用 Laravel 模組化結構，前端使用 Vue.js 組件化，易於維護與擴展。
+   - 後端採用 Laravel 模組化，前端使用 Vue.js 組件化，易於維護與擴展。
    - 支援 Docker Compose 與 GitHub Actions（概念性展示），確保部署效率。
 
 ---
@@ -246,6 +246,78 @@ Vue.component('Dashboard', {
 
 ---
 
+## 常見問題（FAQ）
+
+以下為面向開發者的常見問題，解答專案設計、技術選擇與挑戰，幫助其他開發者快速理解 SaaSumi 的實現邏輯。
+
+### 1. SaaSumi 的核心目標是什麼？
+SaaSumi 是一個多租戶民宿管理 SaaS 平台，專為日本市場設計，目標是讓民宿業者在單一平台上獨立管理營運，整合 AI 房型推薦與 LINE Notify 通知，提升效率與住客體驗。核心功能包括多租戶資料隔離、住客管理、KPI 儀表板與日語在地化。
+
+### 2. 專案有哪些技術亮點？
+- **多租戶架構**：透過 `stancl/tenancy` 實現資料庫隔離，動態切換租戶（`X-Tenant-Domain`），確保資料安全。
+- **AI 推薦**：FastAPI 搭配 `sentence-transformers`（`multilingual-e5-large`），支援日文關鍵詞的語義搜尋與房型推薦。
+- **LINE Notify 整合**：實現 OAuth 授權、租戶特定令牌管理與訊息發送，符合日本市場需求。
+- **日語在地化**：前端使用 Vue.js 3，提供全日語介面，支援日幣（`¥`）與日式日期格式。
+- **模組化設計**：後端模組化（Laravel）、前端組件化（Vue.js），便於維護與擴展。
+
+### 3. 為什麼選擇 Laravel 作為後端框架？多租戶如何實現？
+Laravel 提供成熟的 PHP 生態與高效開發體驗，適合快速構建企業級應用。其內建的 Eloquent ORM、Sanctum 認證與中間件機制簡化了開發流程。  
+多租戶採用 `stancl/tenancy` 套件，實現方式如下：
+- **資料庫隔離**：每個租戶擁有獨立資料庫（`tenant_{id}`），創建租戶時自動生成。
+- **動態切換**：透過 `InitializeTenancyByDomain` 中間件，根據請求的 `X-Tenant-Domain`（如 `tokyo-inn.localhost`）切換資料庫連線。
+- **檔案隔離**：儲存路徑自動加上租戶 ID 前綴（`storage/app/tenants/{tenant_id}`），確保檔案獨立。
+
+### 4. 為什麼使用 FastAPI 實現 AI 推薦，而非直接在 Laravel 中處理？
+- **Python 生態**：Python 的機器學習庫（如 `sentence-transformers`）在語義分析上更強大，適合 AI 任務。
+- **服務解耦**：FastAPI 作為獨立微服務，與 Laravel 後端分離，利於技術棧靈活性和獨立擴展。
+- **性能優勢**：FastAPI 基於 ASGI，處理高併發請求更高效。Laravel 透過 `AIProxyService` 以 HTTP 請求代理 FastAPI，確保通信穩定。
+
+### 5. 前端為何採用 Vue.js CDN 模式與 Tailwind CSS？
+- **快速原型**：CDN 模式無需複雜建置，適合快速開發與技術展示。
+- **輕量 UI**：Tailwind CSS 提供原子化樣式，加速響應式介面開發，減少 CSS 維護成本。
+- **限制**：CDN 模式在生產環境可能受網路延遲影響，且模組管理不如 Vite/Webpack 嚴謹。未來可改用 Vite 打包，提升性能與可維護性。
+
+### 6. 多租戶架構的挑戰與解決方案是什麼？
+- **挑戰 1：資料庫連線管理**  
+  問題：如何在請求間動態切換租戶資料庫？  
+  解決：`stancl/tenancy` 自動管理連線，根據 `X-Tenant-Domain` 切換資料庫配置，無需手動處理。
+- **挑戰 2：檔案儲存隔離**  
+  問題：確保租戶上傳檔案不混淆。  
+  解決：使用 `stancl/tenancy` 的檔案系統隔離，自動為檔案路徑加上租戶 ID 前綴。
+- **挑戰 3：中央與租戶資料庫互動**  
+  問題：系統管理員需存取所有租戶資料，租戶用戶僅限自身資料。  
+  解決：共用表格（如租戶列表）不使用租戶中間件，租戶專屬表格（如住客）則套用中間件。
+
+### 7. AI 推薦系統的日文語義分析如何實現？如何確保準確性？
+- **實現方式**：使用 `sentence-transformers` 的 `multilingual-e5-large` 模型，將日文關鍵詞與房型描述轉為向量，計算餘弦相似度，返回相似度最高的房型。
+- **準確性**：
+  - 模型選擇：`multilingual-e5-large` 支援多語言語義分析，對日文表現優異。
+  - 數據品質：目前使用靜態房型資料，未來可從租戶資料庫動態載入，確保描述豐富。
+  - 改進方向：引入用戶行為數據（如瀏覽記錄）或向量資料庫（如 Milvus），提升個性化推薦。
+
+### 8. 前端如何處理 API 錯誤以提升用戶體驗？
+- **統一請求**：所有 API 呼叫透過 `fetchApi` 函數，檢查 HTTP 狀態並提取錯誤訊息（`data.message` 或 `data.errors`）。
+- **自訂模態**：使用 `showCustomModal` 顯示日語錯誤訊息，取代瀏覽器原生 `alert`，提升視覺一致性。
+- **載入狀態**：請求期間顯示 spinner，避免重複提交，提供即時反饋。
+
+### 9. 您在專案中的主要貢獻是什麼？遇到的技術難題如何解決？
+- **貢獻**：
+  - 設計 Monorepo 架構，整合 Laravel、FastAPI 與 Vue.js。
+  - 實現多租戶（`stancl/tenancy`）、LINE Notify OAuth、住客管理與 KPI 儀表板。
+  - 開發 FastAPI AI 推薦服務與 Vue.js 日語介面。
+- **難題與解決**：
+  - **跨服務通信**：Laravel 與 FastAPI 的 HTTP 請求可能因網路異常失敗。使用 Laravel 的 `Http` facade，設定超時與錯誤處理，確保穩定性。
+  - **Chart.js 動態更新**：KPI 數據變更時，圖表需重新渲染。解決方式為銷毀舊 Chart 實例後重新創建，確保數據同步。
+
+### 10. 未來如何改進 SaaSumi？
+- **認證系統**：實作租戶專屬用戶表與註冊功能，取代模擬登錄。
+- **數據持久化**：將 FastAPI 的房型資料改為從 Laravel 資料庫動態獲取，考慮使用向量資料庫（如 OpenSearch）儲存嵌入向量。
+- **測試覆蓋**：新增 Laravel 單元測試（`phpunit`）、FastAPI 測試（`pytest`）與前端測試（Vue Test Utils），整合至 GitHub Actions。
+- **前端優化**：從 CDN 模式轉為 Vite 打包，提升模組管理與生產環境性能。
+- **監控日誌**：完善 OpenSearch 日誌整合，新增 Prometheus 與 Grafana 監控，提升運維能力。
+
+---
+
 ## 安裝與運行
 
 **注意**：本儲存庫僅包含核心代碼（Laravel 控制器、FastAPI 推薦邏輯、Vue.js 前端組件），用於技術展示與面試用途，無完整的 Laravel 專案結構。若需運行完整應用，需自行搭建 Laravel 環境並整合核心代碼。以下為運行指引：
@@ -349,13 +421,3 @@ Vue.component('Dashboard', {
 - FastAPI 的模型會緩存至 `model_cache` 目錄。
 - 前端需設置正確的 API 位址（`fetchApi` 函數中的 `apiUrl`）。
 - 測試多租戶功能需配置本地 hosts：`127.0.0.1 tokyo-inn.localhost`。
-
----
-
-## 聯繫方式
-
-- **作者**：BpsEason
-- **GitHub**：https://github.com/BpsEason
-- **Email**：bps.eason@example.com（請自行替換）
-
-歡迎提供反饋或技術討論！若有問題，請開 Issue 或聯繫我。
