@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>民宿管理ダッシュボード - White-label SaaS</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Chart.js CDN for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        [v-cloak] { display: none; }
+        .bg-custom-primary { background-color: #4A90E2; }
+        .text-custom-primary { color: #4A90E2; }
+        .ring-custom-primary { --tw-ring-color: #4A90E2; }
+        .border-custom-primary { border-color: #4A90E2; }
+        .text-line-green { color: #00C300; }
+        .bg-line-green { background-color: #00C300; }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Small spinner for buttons */
+        .spinner-small {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal" v-cloak>
+
+    <div id="app" class="flex h-screen overflow-hidden">
+
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-lg p-6 transform transition-transform duration-300 ease-in-out"
+               :class="{ '-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen }">
+            <div class="flex items-center justify-between mb-8">
+                <img :src="auth.logoUrl" alt="Logo" class="h-10">
+                <button @click="toggleSidebar" class="lg:hidden text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <nav>
+                <ul>
+                    <li class="mb-4">
+                        <a href="#Dashboard" @click.prevent="currentView = 'Dashboard'; headerTitle = 'ダッシュボード'; headerIcon = 'fa-chart-line';"
+                           :class="{'text-custom-primary font-bold': currentView === 'Dashboard'}"
+                           class="flex items-center p-3 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-chart-line w-6"></i>
+                            <span class="ml-3">ダッシュボード</span>
+                        </a>
+                    </li>
+                    <li class="mb-4">
+                        <a href="#GuestManagement" @click.prevent="currentView = 'GuestManagement'; headerTitle = '宿泊者管理'; headerIcon = 'fa-users';"
+                           :class="{'text-custom-primary font-bold': currentView === 'GuestManagement'}"
+                           class="flex items-center p-3 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-users w-6"></i>
+                            <span class="ml-3">宿泊者管理</span>
+                        </a>
+                    </li>
+                    <li class="mb-4">
+                        <a href="#RecommendationPanel" @click.prevent="currentView = 'RecommendationPanel'; headerTitle = 'AI推薦分析'; headerIcon = 'fa-robot';"
+                           :class="{'text-custom-primary font-bold': currentView === 'RecommendationPanel'}"
+                           class="flex items-center p-3 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-robot w-6"></i>
+                            <span class="ml-3">AI推薦分析</span>
+                        </a>
+                    </li>
+                    <li class="mb-4">
+                        <a href="#LineNotifySettings" @click.prevent="currentView = 'LineNotifySettings'; headerTitle = 'LINE通知設定'; headerIcon = 'fa-bell';"
+                           :class="{'text-custom-primary font-bold': currentView === 'LineNotifySettings'}"
+                           class="flex items-center p-3 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fab fa-line w-6"></i>
+                            <span class="ml-3">LINE通知設定</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="mt-8 pt-8 border-t border-gray-200">
+                <button @click="logout" class="flex items-center w-full p-3 rounded-lg text-red-500 hover:bg-red-50 transition-colors">
+                    <i class="fas fa-sign-out-alt w-6"></i>
+                    <span class="ml-3">ログアウト</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="bg-white shadow-sm p-6 flex items-center justify-between sticky top-0 z-10">
+                <div class="flex items-center">
+                    <button @click="toggleSidebar" class="lg:hidden text-gray-500 mr-4">
+                        <i class="fas fa-bars fa-lg"></i>
+                    </button>
+                    <i :class="['fas', headerIcon, 'text-gray-500', 'text-2xl', 'mr-3']"></i>
+                    <h1 class="text-2xl font-bold text-gray-800">{{ headerTitle }}</h1>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-600 mr-4">{{ auth.tenantName }} 様</span>
+                    <i class="fas fa-user-circle text-gray-400 text-3xl"></i>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="flex-1 overflow-x-hidden overflow-y-auto p-6 bg-gray-50">
+                <div class="container mx-auto">
+                    <!-- Dynamic Component based on currentView -->
+                    <component :is="currentView" v-if="auth.isAuthenticated"></component>
+
+                    <!-- Login Form (or initial view) -->
+                    <div v-else class="flex items-center justify-center h-full">
+                        <div class="bg-white p-10 rounded-lg shadow-xl w-full max-w-md">
+                            <div class="text-center mb-6">
+                                <img :src="auth.logoUrl" alt="Logo" class="h-12 mx-auto mb-4">
+                                <h2 class="text-2xl font-bold text-gray-800">ログイン</h2>
+                                <p class="text-gray-500">続行するにはテナント名と認証情報を入力してください。</p>
+                            </div>
+                            <form @submit.prevent="login">
+                                <div class="mb-5">
+                                    <label for="tenant_domain" class="block text-gray-700 font-medium mb-2">テナント名 (ドメイン)</label>
+                                    <input type="text" id="tenant_domain" v-model="auth.tenantDomain"
+                                           class="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 ring-custom-primary"
+                                           placeholder="例: tokyo-inn" required>
+                                </div>
+                                <div class="mb-5">
+                                    <label for="email" class="block text-gray-700 font-medium mb-2">メールアドレス</label>
+                                    <input type="email" id="email" v-model="auth.email"
+                                           class="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 ring-custom-primary"
+                                           placeholder="your.email@example.com" required>
+                                </div>
+                                <div class="mb-6">
+                                    <label for="password" class="block text-gray-700 font-medium mb-2">パスワード</label>
+                                    <input type="password" id="password" v-model="auth.password"
+                                           class="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 ring-custom-primary"
+                                           placeholder="********" required>
+                                </div>
+                                <div v-if="auth.error" class="text-red-500 text-center mb-4">{{ auth.error }}</div>
+                                <button type="submit"
+                                        :disabled="auth.isLoading"
+                                        class="w-full bg-custom-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center">
+                                    <span v-if="!auth.isLoading">ログイン</span>
+                                    <div v-else class="spinner"></div>
+                                </button>
+                            </form>
+                            <p class="text-center text-gray-500 text-sm mt-4">デモ用アカウント: admin@example.com / password</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Modal/Message Box Base Structure -->
+    <div id="custom-modal-overlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div id="custom-modal-content" class="bg-white p-8 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 id="custom-modal-title" class="text-xl font-bold mb-4"></h3>
+            <p id="custom-modal-message" class="mb-6"></p>
+            <div id="custom-modal-buttons" class="flex justify-end space-x-4"></div>
+        </div>
+    </div>
+
+    <!-- Vue.js Application Logic -->
+    <script>
+        const { createApp, ref, reactive, computed, watch, provide, inject, onMounted } = Vue;
+
+        // --- Custom Modal/Message Box Function ---
+        function showCustomModal({ title, message, buttons }) {
+            const overlay = document.getElementById('custom-modal-overlay');
+            const modalTitle = document.getElementById('custom-modal-title');
+            const modalMessage = document.getElementById('custom-modal-message');
+            const modalButtons = document.getElementById('custom-modal-buttons');
+
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modalButtons.innerHTML = ''; // Clear previous buttons
+
+            buttons.forEach(btn => {
+                const buttonElement = document.createElement('button');
+                buttonElement.className = btn.className;
+                buttonElement.textContent = btn.text;
+                buttonElement.onclick = () => {
+                    overlay.classList.add('hidden');
+                    if (btn.handler) {
+                        btn.handler();
+                    }
+                };
+                modalButtons.appendChild(buttonElement);
+            });
+            overlay.classList.remove('hidden');
+        }
+
+        // --- Auth Store (Global State) ---
+        const authStore = reactive({
+            isAuthenticated: false,
+            tenantDomain: localStorage.getItem('tenant_domain') || '',
+            email: '',
+            password: '',
+            tenantName: localStorage.getItem('tenant_name') || '未設定',
+            logoUrl: 'https://via.placeholder.com/150/4A90E2/FFFFFF?text=SAAS',
+            apiUrl: 'http://localhost:8000', // Default backend API URL
+            token: localStorage.getItem('api_token') || null,
+            error: null,
+            isLoading: false,
+            lineNotifyStatus: '未接続', // '接続済み' | '未接続' | '待機中'
+            lineNotifyAuthUrl: '',
+        });
+
+        // --- Reusable API Fetch function ---
+        async function fetchApi(endpoint, options = {}) {
+            const url = `${authStore.apiUrl}/api/${endpoint}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json', // Laravel expects Accept: application/json for API errors
+                ...options.headers,
+            };
+
+            if (authStore.token) {
+                headers['Authorization'] = `Bearer ${authStore.token}`;
+            }
+
+            // Set the custom header for multitenancy for Laravel
+            if (authStore.tenantDomain) {
+                // Ensure Nginx passes this correctly based on tenantDomain.localhost
+                headers['X-Tenant-Domain'] = authStore.tenantDomain + '.localhost';
+            }
+
+            try {
+                const response = await fetch(url, { ...options, headers });
+                const data = await response.json();
+                if (!response.ok) {
+                    // Centralized error handling
+                    const errorMessage = data.message || (data.errors && Object.values(data.errors).flat()[0]) || 'API リクエストに失敗しました。';
+                    throw new Error(errorMessage);
+                }
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                // Display error to user via custom modal
+                showCustomModal({
+                    title: 'エラー',
+                    message: `エラーが発生しました: ${error.message}`,
+                    buttons: [{ text: 'OK', className: 'px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors' }]
+                });
+                throw error; // Re-throw to be caught by specific component logic if needed
+            }
+        }
+
+        // --- Vue Components ---
+
+        const Dashboard = {
+            template: `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- KPI Cards -->
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <i class="fas fa-door-open text-3xl text-custom-primary"></i>
+                            <span class="text-xs font-semibold text-green-500 bg-green-100 px-2 py-1 rounded-full">+12%</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">今月の予約数</h3>
+                        <p class="text-3xl font-bold text-gray-800">{{ kpis.monthly_bookings }}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <i class="fas fa-money-bill-wave text-3xl text-green-500"></i>
+                            <span class="text-xs font-semibold text-red-500 bg-red-100 px-2 py-1 rounded-full">-5%</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">総収益 (月)</h3>
+                        <p class="text-3xl font-bold text-gray-800">{{ formatCurrency(kpis.total_revenue_month) }}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <i class="fas fa-star text-3xl text-yellow-500"></i>
+                            <span class="text-xs font-semibold text-green-500 bg-green-100 px-2 py-1 rounded-full">+0.2</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">平均評価</h3>
+                        <p class="text-3xl font-bold text-gray-800">{{ kpis.average_rating }} <span class="text-sm text-gray-400">/ 5.0</span></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <i class="fas fa-users text-3xl text-purple-500"></i>
+                            <span class="text-xs font-semibold text-green-500 bg-green-100 px-2 py-1 rounded-full">+8%</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">新規登録宿泊者</h3>
+                        <p class="text-3xl font-bold text-gray-800">{{ kpis.new_guests_month }}</p>
+                    </div>
+
+                    <!-- Charts & Graphs -->
+                    <div class="lg:col-span-4 bg-white p-6 rounded-lg shadow-md mt-6">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-700">月次予約トレンド</h3>
+                        <canvas id="revenueChart" class="h-64"></canvas>
+                        <div v-if="!chartLoaded" class="h-64 flex items-center justify-center text-gray-400">
+                            <i class="fas fa-chart-bar fa-3x"></i>
+                            <span class="ml-3 text-lg">グラフを読み込み中...</span>
+                        </div>
+                    </div>
+                </div>
+            `,
+            setup() {
+                const kpis = reactive({
+                    monthly_bookings: 0,
+                    total_revenue_month: 0,
+                    average_rating: 0,
+                    new_guests_month: 0,
+                    revenue_trend: []
+                });
+                const chartLoaded = ref(false);
+                let chartInstance = null; // Store chart instance
+
+                const formatCurrency = (amount) => {
+                    return new Intl.NumberFormat('ja-JP', {
+                        style: 'currency',
+                        currency: 'JPY',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    }).format(amount);
+                };
+
+                const fetchKpis = async () => {
+                    try {
+                        const data = await fetchApi('dashboard/kpis');
+                        Object.assign(kpis, data); // Update reactive KPI data
+                        renderChart(); // Re-render chart with new data
+                    } catch (error) {
+                        console.error("Failed to fetch KPIs:", error);
+                    }
+                };
+
+                const renderChart = () => {
+                    if (chartInstance) {
+                        chartInstance.destroy(); // Destroy previous chart instance
+                    }
+                    const ctx = document.getElementById('revenueChart');
+                    if (!ctx) {
+                        console.warn("Chart canvas element not found.");
+                        return;
+                    }
+                    
+                    const labels = kpis.revenue_trend.map(item => item.month);
+                    const dataPoints = kpis.revenue_trend.map(item => item.revenue);
+
+                    chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '収益',
+                                data: dataPoints,
+                                backgroundColor: '#4A90E2',
+                                borderColor: '#4A90E2',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: '収益 (円)'
+                                    },
+                                    ticks: {
+                                        callback: function(value, index, values) {
+                                            return formatCurrency(value);
+                                        }
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: '月'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            if (context.parsed.y !== null) {
+                                                label += formatCurrency(context.parsed.y);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    chartLoaded.value = true;
+                };
+
+                onMounted(() => {
+                    fetchKpis();
+                });
+
+                return { kpis, formatCurrency, chartLoaded };
+            }
+        };
+
+        const GuestManagement = {
+            template: `
+                <div class="bg-white p-8 rounded-lg shadow-xl">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">宿泊者リスト</h2>
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
+                        <div class="relative w-full md:w-1/3">
+                            <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" v-model="searchQuery" @input="fetchGuests" placeholder="名前またはメールアドレスで検索..."
+                                   class="w-full pl-12 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-custom-primary transition-colors focus:outline-none">
+                        </div>
+                        <div class="flex space-x-4">
+                            <button @click="openAddGuestModal"
+                                class="bg-green-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center">
+                                <i class="fas fa-plus mr-2"></i> 新規追加
+                            </button>
+                            <select v-model="sortBy" @change="fetchGuests" class="px-4 py-3 rounded-lg border-2 border-gray-200 bg-white">
+                                <option value="id">ID</option>
+                                <option value="name">名前</option>
+                                <option value="stay_count">宿泊回数</option>
+                                <option value="last_stay_date">最終宿泊日</option>
+                            </select>
+                            <button @click="toggleSortDirection"
+                                    class="px-4 py-3 rounded-lg border-2 border-gray-200 bg-white text-gray-600 hover:bg-gray-100 transition-colors">
+                                <i :class="{'fa-arrow-up': sortDirection === 'asc', 'fa-arrow-down': sortDirection === 'desc'}" class="fas"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto relative shadow-md sm:rounded-lg">
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="py-3 px-6">ID</th>
+                                    <th scope="col" class="py-3 px-6">名前</th>
+                                    <th scope="col" class="py-3 px-6">メールアドレス</th>
+                                    <th scope="col" class="py-3 px-6">宿泊回数</th>
+                                    <th scope="col" class="py-3 px-6">最終宿泊日</th>
+                                    <th scope="col" class="py-3 px-6">ステータス</th>
+                                    <th scope="col" class="py-3 px-6">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="guest in guests" :key="guest.id" class="bg-white border-b hover:bg-gray-50 cursor-pointer" @click="viewGuestDetails(guest)">
+                                    <th scope="row" class="py-4 px-6 font-medium text-gray-900 whitespace-nowrap">{{ guest.id }}</th>
+                                    <td class="py-4 px-6">{{ guest.name }}</td>
+                                    <td class="py-4 px-6">{{ guest.email }}</td>
+                                    <td class="py-4 px-6">{{ guest.stay_count }}</td>
+                                    <td class="py-4 px-6">{{ formatDate(guest.last_stay_date) }}</td>
+                                    <td class="py-4 px-6">
+                                        <span :class="{'bg-green-100 text-green-800': guest.status === 'active', 'bg-red-100 text-red-800': guest.status === 'inactive'}"
+                                              class="text-xs font-semibold px-2.5 py-0.5 rounded-full">{{ guest.status === 'active' ? 'アクティブ' : '非アクティブ' }}</span>
+                                    </td>
+                                    <td class="py-4 px-6">
+                                        <button @click.stop="openEditGuestModal(guest)" class="text-custom-primary hover:underline mr-3">編集</button>
+                                        <button @click.stop="deleteGuest(guest.id)" class="text-red-500 hover:underline">削除</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="guests.length === 0 && !isLoadingGuests" class="text-center py-10 text-gray-500">
+                        該当する宿泊者が見つかりません。
+                    </div>
+                    <div v-if="isLoadingGuests" class="text-center py-10 text-gray-500 flex justify-center items-center">
+                        <div class="spinner-small mr-2"></div> 宿泊者データを読み込み中...
+                    </div>
+                </div>
+
+                <!-- Guest Details Modal -->
+                <div v-if="showDetailModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 class="text-2xl font-bold mb-4">宿泊者詳細</h3>
+                        <div v-if="selectedGuest">
+                            <p class="mb-2"><span class="font-semibold">ID:</span> {{ selectedGuest.id }}</p>
+                            <p class="mb-2"><span class="font-semibold">名前:</span> {{ selectedGuest.name }}</p>
+                            <p class="mb-2"><span class="font-semibold">メール:</span> {{ selectedGuest.email }}</p>
+                            <p class="mb-2"><span class="font-semibold">電話:</span> {{ selectedGuest.phone || 'N/A' }}</p>
+                            <p class="mb-2"><span class="font-semibold">国:</span> {{ selectedGuest.country || 'N/A' }}</p>
+                            <p class="mb-2"><span class="font-semibold">宿泊回数:</span> {{ selectedGuest.stay_count }}</p>
+                            <p class="mb-2"><span class="font-semibold">最終宿泊日:</span> {{ formatDate(selectedGuest.last_stay_date) || 'N/A' }}</p>
+                            <p class="mb-4"><span class="font-semibold">ステータス:</span> {{ selectedGuest.status === 'active' ? 'アクティブ' : '非アクティブ' }}</p>
+                            <button @click="showDetailModal = false" class="bg-custom-primary text-white py-2 px-4 rounded-lg hover:bg-blue-600">閉じる</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add/Edit Guest Modal -->
+                <div v-if="showGuestFormModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 class="text-2xl font-bold mb-4">{{ isEditingGuest ? '宿泊者情報を編集' : '新規宿泊者を追加' }}</h3>
+                        <form @submit.prevent="saveGuest">
+                            <div class="mb-4">
+                                <label for="guestName" class="block text-gray-700 font-medium mb-2">名前</label>
+                                <input type="text" id="guestName" v-model="guestForm.name" required
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-4">
+                                <label for="guestEmail" class="block text-gray-700 font-medium mb-2">メールアドレス</label>
+                                <input type="email" id="guestEmail" v-model="guestForm.email" required
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-4">
+                                <label for="guestPhone" class="block text-gray-700 font-medium mb-2">電話番号</label>
+                                <input type="text" id="guestPhone" v-model="guestForm.phone"
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-4">
+                                <label for="guestCountry" class="block text-gray-700 font-medium mb-2">国</label>
+                                <input type="text" id="guestCountry" v-model="guestForm.country"
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-4">
+                                <label for="guestStayCount" class="block text-gray-700 font-medium mb-2">宿泊回数</label>
+                                <input type="number" id="guestStayCount" v-model.number="guestForm.stay_count" min="0"
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-4">
+                                <label for="guestLastStay" class="block text-gray-700 font-medium mb-2">最終宿泊日</label>
+                                <input type="date" id="guestLastStay" v-model="guestForm.last_stay_date"
+                                       class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            </div>
+                            <div class="mb-6">
+                                <label for="guestStatus" class="block text-gray-700 font-medium mb-2">ステータス</label>
+                                <select id="guestStatus" v-model="guestForm.status"
+                                        class="w-full px-3 py-2 rounded-lg border-2 border-gray-200 bg-white focus:border-custom-primary focus:outline-none">
+                                    <option value="active">アクティブ</option>
+                                    <option value="inactive">非アクティブ</option>
+                                </select>
+                            </div>
+                            <div class="flex justify-end space-x-4">
+                                <button type="button" @click="showGuestFormModal = false" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">キャンセル</button>
+                                <button type="submit" :disabled="isSavingGuest"
+                                        class="px-4 py-2 rounded-lg bg-custom-primary text-white hover:bg-blue-600 flex items-center">
+                                    <span v-if="!isSavingGuest">保存</span>
+                                    <div v-else class="spinner-small mr-2"></div>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `,
+            setup() {
+                const guests = ref([]);
+                const searchQuery = ref('');
+                const sortBy = ref('id');
+                const sortDirection = ref('asc');
+                const isLoadingGuests = ref(false);
+                const showDetailModal = ref(false);
+                const selectedGuest = ref(null);
+                const showGuestFormModal = ref(false);
+                const isEditingGuest = ref(false);
+                const guestForm = reactive({
+                    id: null,
+                    name: '',
+                    email: '',
+                    phone: '',
+                    country: '',
+                    stay_count: 0,
+                    last_stay_date: '',
+                    status: 'active'
+                });
+                const isSavingGuest = ref(false);
+
+
+                const fetchGuests = async () => {
+                    isLoadingGuests.value = true;
+                    try {
+                        const params = new URLSearchParams({
+                            query: searchQuery.value,
+                            sortBy: sortBy.value,
+                            sortDirection: sortDirection.value
+                        });
+                        const data = await fetchApi(`guests?${params.toString()}`);
+                        guests.value = data;
+                    } catch (error) {
+                        console.error("Failed to fetch guests:", error);
+                    } finally {
+                        isLoadingGuests.value = false;
+                    }
+                };
+
+                const toggleSortDirection = () => {
+                    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+                    fetchGuests();
+                };
+
+                const formatDate = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    const date = new Date(dateString);
+                    // Ensure valid date
+                    if (isNaN(date.getTime())) {
+                        return 'Invalid Date';
+                    }
+                    return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+                };
+
+                const viewGuestDetails = (guest) => {
+                    selectedGuest.value = guest;
+                    showDetailModal.value = true;
+                };
+
+                const openAddGuestModal = () => {
+                    isEditingGuest.value = false;
+                    Object.assign(guestForm, {
+                        id: null,
+                        name: '',
+                        email: '',
+                        phone: '',
+                        country: '',
+                        stay_count: 0,
+                        last_stay_date: '',
+                        status: 'active'
+                    });
+                    showGuestFormModal.value = true;
+                };
+
+                const openEditGuestModal = (guest) => {
+                    isEditingGuest.value = true;
+                    Object.assign(guestForm, { ...guest });
+                    // Format date for input type="date"
+                    if (guestForm.last_stay_date) {
+                        guestForm.last_stay_date = new Date(guestForm.last_stay_date).toISOString().split('T')[0];
+                    }
+                    showGuestFormModal.value = true;
+                };
+
+                const saveGuest = async () => {
+                    isSavingGuest.value = true;
+                    try {
+                        let response;
+                        if (isEditingGuest.value) {
+                            response = await fetchApi(`guests/${guestForm.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(guestForm)
+                            });
+                        } else {
+                            response = await fetchApi('guests', {
+                                method: 'POST',
+                                body: JSON.stringify(guestForm)
+                            });
+                        }
+                        showCustomModal({
+                            title: '成功',
+                            message: `宿泊者情報が正常に${isEditingGuest.value ? '更新' : '追加'}されました。`,
+                            buttons: [{ text: 'OK', className: 'px-6 py-2 rounded-lg bg-custom-primary text-white hover:bg-blue-600 transition-colors', handler: () => {
+                                showGuestFormModal.value = false;
+                                fetchGuests();
+                            }}]
+                        });
+                    } catch (error) {
+                        // Error handling is already in fetchApi, no need to show again here
+                        console.error("Failed to save guest:", error);
+                    } finally {
+                        isSavingGuest.value = false;
+                    }
+                };
+
+                const deleteGuest = async (id) => {
+                    showCustomModal({
+                        title: '確認',
+                        message: '本当にこの宿泊者を削除しますか？',
+                        buttons: [
+                            { text: 'キャンセル', className: 'px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors', handler: () => {} },
+                            { text: '削除', className: 'px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors', handler: async () => {
+                                try {
+                                    await fetchApi(`guests/${id}`, { method: 'DELETE' });
+                                    showCustomModal({
+                                        title: '成功',
+                                        message: '宿泊者が正常に削除されました。',
+                                        buttons: [{ text: 'OK', className: 'px-6 py-2 rounded-lg bg-custom-primary text-white hover:bg-blue-600 transition-colors', handler: fetchGuests }]
+                                    });
+                                } catch (error) {
+                                    console.error("Failed to delete guest:", error);
+                                }
+                            }}
+                        ]
+                    });
+                };
+
+
+                onMounted(fetchGuests); // Fetch guests when component is mounted
+
+                // Watch search query for immediate filtering
+                watch(searchQuery, () => {
+                    // Small debounce for search input
+                    if (this._searchTimeout) clearTimeout(this._searchTimeout);
+                    this._searchTimeout = setTimeout(fetchGuests, 300);
+                });
+
+                return {
+                    guests,
+                    searchQuery,
+                    sortBy,
+                    sortDirection,
+                    isLoadingGuests,
+                    toggleSortDirection,
+                    formatDate,
+                    showDetailModal,
+                    selectedGuest,
+                    viewGuestDetails,
+                    showGuestFormModal,
+                    isEditingGuest,
+                    guestForm,
+                    openAddGuestModal,
+                    openEditGuestModal,
+                    saveGuest,
+                    deleteGuest,
+                    isSavingGuest
+                };
+            }
+        };
+
+        const RecommendationPanel = {
+            template: `
+                <div class="bg-white p-8 rounded-lg shadow-xl">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">AIによる部屋タイプ推薦</h2>
+                    <p class="text-gray-600 mb-6">宿泊者の要望やレビューのキーワードを入力して、最適な部屋タイプを推薦します。</p>
+                    <div class="mb-6">
+                        <label for="keywords" class="block text-gray-700 font-medium mb-2">キーワード (日本語で入力)</label>
+                        <textarea id="keywords" v-model="keywords" rows="4"
+                                  class="w-full p-3 rounded-lg border-2 border-gray-200 focus:border-custom-primary transition-colors focus:outline-none"
+                                  placeholder="例：静かで景色が良い部屋、温泉付きの部屋、家族で泊まれる広い部屋..."></textarea>
+                    </div>
+                    <div class="flex justify-end mb-6">
+                        <button @click="getRecommendations" :disabled="isLoading"
+                                class="bg-custom-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-600 transition-colors flex items-center">
+                            <span v-if="!isLoading">推薦を取得</span>
+                            <div v-else class="spinner-small mr-2"></div>
+                            <span v-if="isLoading">分析中...</span>
+                        </button>
+                    </div>
+                    
+                    <div v-if="recommendations.length > 0" class="mt-8">
+                        <h3 class="text-xl font-bold text-gray-700 mb-4">推薦結果 <span class="text-gray-500 font-normal">（類似度順）</span></h3>
+                        <div class="space-y-4">
+                            <div v-for="rec in recommendations" :key="rec.id" class="bg-gray-50 p-6 rounded-lg border border-gray-200 flex items-center">
+                                <img v-if="rec.image_url" :src="rec.image_url" alt="Room Image" class="w-24 h-24 object-cover rounded-lg mr-6 flex-shrink-0" onerror="this.onerror=null;this.src='https://placehold.co/150x100/AAAAAA/FFFFFF?text=No+Image';"/>
+                                <div class="flex-grow">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h4 class="text-lg font-semibold text-gray-800">{{ rec.name }}</h4>
+                                        <span class="text-sm font-bold px-3 py-1 rounded-full text-white"
+                                            :class="getScoreColor(rec.score)">
+                                            類似度: {{ (rec.score * 100).toFixed(1) }}%
+                                        </span>
+                                    </div>
+                                    <p class="text-gray-600">{{ rec.description }}</p>
+                                    <p v-if="rec.explanation" class="text-gray-500 text-sm mt-2 italic">{{ rec.explanation }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else-if="!isLoading" class="mt-8 text-center text-gray-500 p-10 border-2 border-dashed border-gray-300 rounded-lg">
+                        <i class="fas fa-robot fa-3x mb-4"></i>
+                        <p>キーワードを入力して「推薦を取得」ボタンをクリックすると、ここに結果が表示されます。</p>
+                    </div>
+                    <div v-if="error" class="mt-4 text-red-500 text-center">{{ error }}</div>
+                </div>
+            `,
+            setup() {
+                const keywords = ref('');
+                const recommendations = ref([]);
+                const isLoading = ref(false);
+                const error = ref(null);
+                const auth = inject('auth');
+
+                const getRecommendations = async () => {
+                    if (!keywords.value.trim()) {
+                        error.value = 'キーワードを入力してください。';
+                        return;
+                    }
+                    isLoading.value = true;
+                    error.value = null;
+                    recommendations.value = [];
+
+                    try {
+                        const response = await fetchApi('ai/recommend', {
+                            method: 'POST',
+                            body: JSON.stringify({ keywords: keywords.value }),
+                        });
+                        recommendations.value = response.recommendations;
+                    } catch (err) {
+                        // Error message already handled by fetchApi, just log for console
+                        console.error(err);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const getScoreColor = (score) => {
+                    if (score > 0.8) return 'bg-green-500';
+                    if (score > 0.6) return 'bg-yellow-500';
+                    return 'bg-red-500';
+                };
+
+                return {
+                    keywords,
+                    recommendations,
+                    isLoading,
+                    error,
+                    getRecommendations,
+                    getScoreColor
+                };
+            }
+        };
+
+        const LineNotifySettings = {
+            template: `
+                <div class="bg-white p-8 rounded-lg shadow-xl">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">LINE通知設定</h2>
+                    <div class="flex items-center mb-6 p-6 rounded-lg"
+                         :class="{'bg-green-50 border-green-200': auth.lineNotifyStatus === '接続済み', 'bg-red-50 border-red-200': auth.lineNotifyStatus !== '接続済み'}">
+                        <div class="text-4xl mr-4" :class="{'text-line-green': auth.lineNotifyStatus === '接続済み', 'text-red-500': auth.lineNotifyStatus !== '接続済み'}">
+                            <i :class="{'fab fa-line': true, 'animate-bounce': auth.lineNotifyStatus === '待機中', 'fa-shake': auth.lineNotifyStatus === '未接続'}"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold mb-1" :class="{'text-line-green': auth.lineNotifyStatus === '接続済み', 'text-red-800': auth.lineNotifyStatus !== '接続済み'}">
+                                ステータス: {{ auth.lineNotifyStatus }}
+                            </h3>
+                            <p class="text-gray-600">
+                                {{ statusMessage }}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex space-x-4">
+                        <a v-if="auth.lineNotifyStatus !== '接続済み' && auth.lineNotifyAuthUrl" :href="auth.lineNotifyAuthUrl" target="_blank"
+                           class="bg-line-green text-white font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center">
+                            <i class="fab fa-line mr-2"></i>
+                            <span>LINE Notifyと連携</span>
+                        </a>
+                        <button v-if="auth.lineNotifyStatus === '接続済み'" @click="revokeToken"
+                                class="bg-gray-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center">
+                            <i class="fas fa-unlink mr-2"></i>
+                            <span>連携を解除</span>
+                        </button>
+                    </div>
+
+                    <div v-if="auth.lineNotifyStatus === '接続済み' || auth.lineNotifyAuthUrl" class="mt-6">
+                        <label for="message" class="block text-gray-700 font-medium mb-2">テストメッセージを送信</label>
+                        <div class="flex space-x-2">
+                            <input type="text" v-model="testMessage" placeholder="メッセージを入力..."
+                                   class="flex-1 p-3 rounded-lg border-2 border-gray-200 focus:border-custom-primary focus:outline-none">
+                            <button @click="sendTestMessage" :disabled="isSending"
+                                    class="bg-custom-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center">
+                                <span v-if="!isSending">送信</span>
+                                <div v-else class="spinner-small"></div>
+                            </button>
+                        </div>
+                        <div v-if="sendResult" class="mt-2 text-sm" :class="{'text-green-600': sendResult.includes('成功'), 'text-red-600': sendResult.includes('失敗')}">
+                            {{ sendResult }}
+                        </div>
+                    </div>
+                    <div v-if="error" class="mt-4 text-red-500 text-center">{{ error }}</div>
+                </div>
+            `,
+            setup() {
+                const auth = inject('auth');
+                const testMessage = ref('');
+                const isSending = ref(false);
+                const sendResult = ref('');
+                const error = ref(null);
+
+                const statusMessage = computed(() => {
+                    switch (auth.lineNotifyStatus) {
+                        case '接続済み': return 'LINE Notifyとの連携が完了しています。通知がこのアカウントに送信されます。';
+                        case '待機中': return 'LINEの認証ページにリダイレクト中です...';
+                        default: return 'LINE Notifyとの連携はまだ行われていません。以下のボタンから連携してください。';
+                    }
+                });
+
+                const getAuthUrl = async () => {
+                    try {
+                        const response = await fetchApi('line-notify/auth-url');
+                        auth.lineNotifyAuthUrl = response.auth_url;
+                        if (!auth.token) {
+                            auth.lineNotifyStatus = '未接続';
+                        }
+                    } catch (err) {
+                        error.value = 'LINE Notifyの認証URLを取得できませんでした。';
+                        auth.lineNotifyAuthUrl = '';
+                        auth.lineNotifyStatus = '未接続';
+                    }
+                };
+
+                const sendTestMessage = async () => {
+                    if (!testMessage.value.trim()) return;
+                    isSending.value = true;
+                    sendResult.value = '';
+                    error.value = null;
+                    try {
+                        await fetchApi('line-notify/send-message', {
+                            method: 'POST',
+                            body: JSON.stringify({ message: testMessage.value })
+                        });
+                        sendResult.value = 'テストメッセージの送信に成功しました！';
+                    } catch (err) {
+                        sendResult.value = 'テストメッセージの送信に失敗しました。トークンが有効か確認してください。';
+                        // fetchApi already shows modal, just log.
+                        console.error(err);
+                    } finally {
+                        isSending.value = false;
+                    }
+                };
+
+                const revokeToken = async () => {
+                    showCustomModal({
+                        title: '確認',
+                        message: '本当にLINE Notifyとの連携を解除しますか？',
+                        buttons: [
+                            { text: 'キャンセル', className: 'px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors' },
+                            { text: '解除', className: 'px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors', handler: async () => {
+                                try {
+                                    await fetchApi('line-notify/revoke', { method: 'POST' });
+                                    auth.lineNotifyStatus = '未接続';
+                                    auth.lineNotifyAuthUrl = '';
+                                    showCustomModal({
+                                        title: '成功',
+                                        message: '連携が解除されました。',
+                                        buttons: [{ text: 'OK', className: 'px-6 py-2 rounded-lg bg-custom-primary text-white hover:bg-blue-600 transition-colors', handler: getAuthUrl }]
+                                    });
+                                } catch (err) {
+                                    // fetchApi already shows modal, just log.
+                                    console.error(err);
+                                }
+                            }}
+                        ]
+                    });
+                };
+                
+                onMounted(() => {
+                    getAuthUrl(); // Fetch status on component mount
+                });
+
+                watch(() => auth.token, (newToken) => {
+                    if (newToken) {
+                        auth.lineNotifyStatus = '接続済み';
+                    } else {
+                        if (auth.tenantDomain) {
+                           getAuthUrl();
+                        } else {
+                           auth.lineNotifyStatus = '未接続';
+                        }
+                    }
+                }, { immediate: true });
+
+                return {
+                    auth,
+                    statusMessage,
+                    testMessage,
+                    isSending,
+                    sendResult,
+                    sendTestMessage,
+                    revokeToken,
+                    error
+                };
+            }
+        };
+        
+        // --- Root App Setup ---
+        const App = {
+            setup() {
+                const auth = inject('auth');
+                const currentView = ref(window.location.hash.slice(1) || 'Dashboard');
+                const isSidebarOpen = ref(window.innerWidth >= 1024);
+                const headerTitle = ref('ダッシュボード');
+                const headerIcon = ref('fa-chart-line');
+
+                // Basic hash-based router
+                const updateViewFromHash = () => {
+                    const hash = window.location.hash.slice(1);
+                    if (hash) {
+                        currentView.value = hash;
+                        // Update header based on view
+                        const viewMap = {
+                            'Dashboard': { title: 'ダッシュボード', icon: 'fa-chart-line' },
+                            'GuestManagement': { title: '宿泊者管理', icon: 'fa-users' },
+                            'RecommendationPanel': { title: 'AI推薦分析', icon: 'fa-robot' },
+                            'LineNotifySettings': { title: 'LINE通知設定', icon: 'fa-bell' }
+                        };
+                        if (viewMap[hash]) {
+                            headerTitle.value = viewMap[hash].title;
+                            headerIcon.value = viewMap[hash].icon;
+                        }
+                    }
+                };
+                window.addEventListener('hashchange', updateViewFromHash);
+
+                const toggleSidebar = () => {
+                    isSidebarOpen.value = !isSidebarOpen.value;
+                };
+
+                const login = async () => {
+                    auth.isLoading = true;
+                    auth.error = null;
+                    auth.token = null;
+
+                    // Set API URL based on tenant domain
+                    auth.apiUrl = `http://${auth.tenantDomain}.localhost:8000`;
+
+                    try {
+                        const response = await fetch(`${auth.apiUrl}/api/login`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json', // Crucial for Laravel validation error responses
+                                'X-Tenant-Domain': auth.tenantDomain + '.localhost' // Pass tenant domain
+                            },
+                            body: JSON.stringify({
+                                email: auth.email,
+                                password: auth.password,
+                                tenant_domain: auth.tenantDomain // Pass tenant domain to API
+                            })
+                        });
+                        const data = await response.json();
+
+                        if (response.ok && data.token) {
+                            auth.token = data.token;
+                            auth.isAuthenticated = true;
+                            auth.tenantName = auth.tenantDomain;
+                            localStorage.setItem('api_token', data.token);
+                            localStorage.setItem('tenant_domain', auth.tenantDomain);
+                            localStorage.setItem('tenant_name', auth.tenantDomain);
+                            window.location.hash = 'Dashboard';
+                            updateViewFromHash();
+                        } else {
+                            // Error handled by fetchApi if `response.ok` is false
+                            throw new Error(data.message || 'ログインに失敗しました。');
+                        }
+                    } catch (err) {
+                        // Error message already handled by fetchApi, no need to show again here
+                        console.error('Login Error caught by component:', err);
+                        auth.error = err.message || 'ログインに失敗しました。テナント名または認証情報を確認してください。';
+                    } finally {
+                        auth.isLoading = false;
+                    }
+                };
+
+                const logout = () => {
+                    auth.isAuthenticated = false;
+                    auth.token = null;
+                    localStorage.removeItem('api_token');
+                    localStorage.removeItem('tenant_name');
+                    window.location.hash = '';
+                };
+
+                // Check for existing token on load
+                if (auth.token && auth.tenantDomain) {
+                    auth.isAuthenticated = true;
+                    auth.apiUrl = `http://${auth.tenantDomain}.localhost:8000`;
+                    updateViewFromHash();
+                }
+
+                return {
+                    currentView,
+                    isSidebarOpen,
+                    toggleSidebar,
+                    login,
+                    logout,
+                    auth,
+                    headerTitle,
+                    headerIcon
+                };
+            },
+            components: {
+                Dashboard,
+                GuestManagement,
+                RecommendationPanel,
+                LineNotifySettings
+            }
+        };
+
+        const app = createApp(App);
+        app.provide('auth', authStore); // Provide the auth store globally
+        app.mount('#app');
+    </script>
+</body>
+</html>
