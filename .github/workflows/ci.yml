@@ -1,0 +1,93 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: saas_central_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: pdo_mysql, mbstring, exif, pcntl, bcmath, zip, gd
+        tools: composer, phpunit
+
+    - name: Copy .env.example to .env
+      run: cp .env.example .env
+
+    - name: Wait for MySQL to be ready
+      run: |
+        while ! mysqladmin ping -h 127.0.0.1 -P 3306 --silent; do
+          echo "Waiting for MySQL to start..."
+          sleep 2
+        done
+        echo "MySQL is up and running!"
+      # This step can be simplified using the 'services' health checks,
+      # but this is a robust alternative for older runners.
+    
+    - name: Install Composer dependencies
+      working-directory: ./backend
+      run: composer install --no-dev --no-interaction --prefer-dist
+
+    - name: Generate Laravel key
+      working-directory: ./backend
+      run: php artisan key:generate
+
+    - name: Run migrations
+      working-directory: ./backend
+      run: php artisan migrate --force
+
+    - name: Run Laravel Tests
+      working-directory: ./backend
+      run: php artisan test
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: fastapi-recommend/requirements.txt
+        
+    - name: Install FastAPI dependencies
+      working-directory: ./fastapi-recommend
+      run: pip install -r requirements.txt
+      
+    - name: Run FastAPI tests (if any)
+      # You would add a test command here if you had a test suite for FastAPI
+      run: echo "No FastAPI tests defined. Skipping..."
+
+    - name: Build Docker images
+      run: docker-compose build
+
+    - name: Print success message
+      run: echo "Build and test completed successfully!"
+
